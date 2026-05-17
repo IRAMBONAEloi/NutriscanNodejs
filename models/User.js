@@ -2,100 +2,102 @@
 
 // const mongoose = require('mongoose');
 // const bcrypt = require('bcryptjs');
+// const jwt = require('jsonwebtoken');
 
 // // User Schema
-// const userSchema = new mongoose.Schema({
-//   name: {
-//     type: String,
-//     required: [true, 'Please provide a name'],
-//     trim: true,
-//     minlength: [2, 'Name must be at least 2 characters'],
-//     maxlength: [50, 'Name cannot exceed 50 characters']
-//   },
-
-//   email: {
-//     type: String,
-//     required: [true, 'Please provide an email'],
-//     unique: true,
-//     lowercase: true,
-//     trim: true,
-//     match: [
-//       /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
-//       'Please provide a valid email address'
-//     ]
-//   },
-
-//   password: {
-//     type: String,
-//     required: [true, 'Please provide a password'],
-//     minlength: [6, 'Password must be at least 6 characters'],
-//     select: false
-//   },
-
-//   role: {
-//     type: String,
-//     enum: {
-//       values: ['manager', 'chef', 'staff'],
-//       message: 'Role must be either manager, chef, or staff'
+// const userSchema = new mongoose.Schema(
+//   {
+//     name: {
+//       type: String,
+//       required: [true, 'Please provide a name'],
+//       trim: true,
+//       minlength: [2, 'Name must be at least 2 characters'],
+//       maxlength: [50, 'Name cannot exceed 50 characters']
 //     },
-//     default: 'staff'
-//   },
 
-//   isActive: {
-//     type: Boolean,
-//     default: true
-//   },
+//     email: {
+//       type: String,
+//       required: [true, 'Please provide an email'],
+//       unique: true, // ✅ creates unique index automatically
+//       lowercase: true,
+//       trim: true,
+//       match: [
+//         /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
+//         'Please provide a valid email address'
+//       ]
+//     },
 
-//   lastLogin: {
-//     type: Date,
-//     default: null
-//   },
+//     password: {
+//       type: String,
+//       required: [true, 'Please provide a password'],
+//       minlength: [6, 'Password must be at least 6 characters'],
+//       select: false
+//     },
 
-//   // 🔐 REAL SESSION CONTROL (needed for logout security)
-//   token: {
-//     type: String,
-//     default: null,
-//   },
+//     role: {
+//       type: String,
+//       enum: {
+//         values: ['manager', 'chef', 'staff'],
+//         message: 'Role must be either manager, chef, or staff'
+//       },
+//       default: 'staff'
+//     },
 
-//   createdAt: {
-//     type: Date,
-//     default: Date.now
-//   },
+//     isActive: {
+//       type: Boolean,
+//       default: true
+//     },
 
-//   updatedAt: {
-//     type: Date,
-//     default: Date.now
+//     lastLogin: {
+//       type: Date,
+//       default: null
+//     },
+
+//     // 🔐 Session token storage
+//     token: {
+//       type: String,
+//       default: null
+//     }
+//   },
+//   {
+//     timestamps: true, // ✅ automatically adds createdAt & updatedAt
+//     toJSON: { virtuals: true },
+//     toObject: { virtuals: true }
 //   }
-// }, {
-//   timestamps: true,
-//   toJSON: { virtuals: true },
-//   toObject: { virtuals: true }
+// );
+
+// // 🔐 Hash password before save
+// userSchema.pre('save', async function (next) {
+//   if (!this.isModified('password')) {
+//     return next();
+//   }
+
+//   try {
+//     const saltRounds =
+//       parseInt(process.env.BCRYPT_SALT_ROUNDS) || 12;
+
+//     const salt = await bcrypt.genSalt(saltRounds);
+
+//     this.password = await bcrypt.hash(this.password, salt);
+
+//     next();
+//   } catch (error) {
+//     next(error);
+//   }
 // });
 
-// // 🔐 STRONGER PASSWORD HASHING
-// userSchema.pre('save', async function () {
-//   if (!this.isModified('password')) return;
-
-//   const saltRounds = parseInt(process.env.BCRYPT_SALT_ROUNDS) || 12;
-
-//   const salt = await bcrypt.genSalt(saltRounds);
-//   this.password = await bcrypt.hash(this.password, salt);
-// });
-
-// // Update timestamp safely
-// userSchema.pre('save', function () {
-//   this.updatedAt = Date.now();
-// });
-
-// // Compare password
-// userSchema.methods.comparePassword = async function(candidatePassword) {
-//   return await bcrypt.compare(candidatePassword, this.password);
+// // 🔐 Compare password
+// userSchema.methods.comparePassword = async function (
+//   candidatePassword
+// ) {
+//   return await bcrypt.compare(
+//     candidatePassword,
+//     this.password
+//   );
 // };
 
-// // Generate JWT token
-// userSchema.methods.generateAuthToken = function() {
-//   const jwt = require('jsonwebtoken');
-
+// // 🔐 Generate JWT Token
+// userSchema.methods.generateAuthToken = function () {
 //   return jwt.sign(
 //     {
 //       id: this._id,
@@ -110,21 +112,24 @@
 //   );
 // };
 
-// // Clean response
-// userSchema.methods.toJSON = function() {
+// // 🔐 Clean response
+// userSchema.methods.toJSON = function () {
 //   const user = this.toObject();
+
 //   delete user.password;
 //   delete user.__v;
+
 //   return user;
 // };
 
-// // Find user by email
-// userSchema.statics.findByEmail = function(email) {
-//   return this.findOne({ email: email.toLowerCase() });
+// // 🔍 Find by email
+// userSchema.statics.findByEmail = function (email) {
+//   return this.findOne({
+//     email: email.toLowerCase()
+//   });
 // };
 
-// // Indexes (security + performance)
-// userSchema.index({ email: 1 });
+// // ✅ Additional indexes (NO duplicate email index)
 // userSchema.index({ role: 1 });
 // userSchema.index({ createdAt: -1 });
 
@@ -145,11 +150,16 @@
 
 
 
+
+
+
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
+// =========================
 // User Schema
+// =========================
 const userSchema = new mongoose.Schema(
   {
     name: {
@@ -163,7 +173,7 @@ const userSchema = new mongoose.Schema(
     email: {
       type: String,
       required: [true, 'Please provide an email'],
-      unique: true, // ✅ creates unique index automatically
+      unique: true,
       lowercase: true,
       trim: true,
       match: [
@@ -198,40 +208,38 @@ const userSchema = new mongoose.Schema(
       default: null
     },
 
-    // 🔐 Session token storage
     token: {
       type: String,
       default: null
     }
   },
   {
-    timestamps: true, // ✅ automatically adds createdAt & updatedAt
+    timestamps: true,
     toJSON: { virtuals: true },
     toObject: { virtuals: true }
   }
 );
 
-// 🔐 Hash password before save
-userSchema.pre('save', async function (next) {
+// =========================
+// Hash Password Before Save
+// =========================
+userSchema.pre('save', async function () {
+  // Only hash password if modified
   if (!this.isModified('password')) {
-    return next();
+    return;
   }
 
-  try {
-    const saltRounds =
-      parseInt(process.env.BCRYPT_SALT_ROUNDS) || 12;
+  const saltRounds =
+    parseInt(process.env.BCRYPT_SALT_ROUNDS) || 12;
 
-    const salt = await bcrypt.genSalt(saltRounds);
+  const salt = await bcrypt.genSalt(saltRounds);
 
-    this.password = await bcrypt.hash(this.password, salt);
-
-    next();
-  } catch (error) {
-    next(error);
-  }
+  this.password = await bcrypt.hash(this.password, salt);
 });
 
-// 🔐 Compare password
+// =========================
+// Compare Password Method
+// =========================
 userSchema.methods.comparePassword = async function (
   candidatePassword
 ) {
@@ -241,14 +249,16 @@ userSchema.methods.comparePassword = async function (
   );
 };
 
-// 🔐 Generate JWT Token
+// =========================
+// Generate JWT Token
+// =========================
 userSchema.methods.generateAuthToken = function () {
   return jwt.sign(
     {
       id: this._id,
+      name: this.name,
       email: this.email,
-      role: this.role,
-      name: this.name
+      role: this.role
     },
     process.env.JWT_SECRET,
     {
@@ -257,7 +267,9 @@ userSchema.methods.generateAuthToken = function () {
   );
 };
 
-// 🔐 Clean response
+// =========================
+// Clean Response
+// =========================
 userSchema.methods.toJSON = function () {
   const user = this.toObject();
 
@@ -267,18 +279,24 @@ userSchema.methods.toJSON = function () {
   return user;
 };
 
-// 🔍 Find by email
+// =========================
+// Static Method - Find by Email
+// =========================
 userSchema.statics.findByEmail = function (email) {
   return this.findOne({
     email: email.toLowerCase()
   });
 };
 
-// ✅ Additional indexes (NO duplicate email index)
+// =========================
+// Indexes
+// =========================
 userSchema.index({ role: 1 });
 userSchema.index({ createdAt: -1 });
 
+// =========================
 // Model
+// =========================
 const User = mongoose.model('User', userSchema);
 
 module.exports = User;
