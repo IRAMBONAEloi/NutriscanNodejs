@@ -1,167 +1,228 @@
-const axios = require("axios");
-const { v4: uuidv4 } = require("uuid");
+
 const Payment = require("../models/Payment");
-require("dotenv").config();
 
-const MTN_SUBSCRIPTION_KEY = process.env.MTN_SUBSCRIPTION_KEY;
-const MTN_API_USER = process.env.MTN_API_USER;
-const MTN_API_KEY = process.env.MTN_API_KEY;
-const MTN_BASE_URL = process.env.MTN_BASE_URL;
-const MTN_ENVIRONMENT = process.env.MTN_ENVIRONMENT;
+const {
+  generateReference,
+  initiatePayment,
+  checkPaymentStatus,
+} = require("../utils/urubutoService");
 
-/**
- * GET ACCESS TOKEN
- */
-const getAccessToken = async () => {
-  try {
-    const auth = Buffer.from(
-      `${MTN_API_USER}:${MTN_API_KEY}`
-    ).toString("base64");
 
-    const response = await axios.post(
-      `${MTN_BASE_URL}/collection/token/`,
-      {},
-      {
-        headers: {
-          Authorization: `Basic ${auth}`,
-          "Ocp-Apim-Subscription-Key": MTN_SUBSCRIPTION_KEY,
-        },
-      }
-    );
+// CREATE PAYMENT (ALWAYS PENDING FIRST)
 
-    return response.data.access_token;
-  } catch (error) {
-    console.log(error.response?.data || error.message);
-    throw new Error("Failed to get MTN token");
-  }
-};
 
-/**
- * CREATE PAYMENT
- */
 const createPayment = async (req, res) => {
   try {
     const {
+      customerName,
       phoneNumber,
-      amount,
-      currency,
-      payerMessage,
-      payeeNote,
+      productName,
+      price,
+      orderId,
     } = req.body;
 
-    const referenceId = uuidv4();
-    const token = await getAccessToken();
+    // VALIDATION
+    if (
+      !customerName ||
+      !phoneNumber ||
+      !productName ||
+      !price||
+      !orderId
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields",
+      });
+    }
 
-    const payload = {
-      amount: amount.toString(),
-      currency: currency || "EUR",
-      externalId: Date.now().toString(),
-      payer: {
-        partyIdType: "MSISDN",
-        partyId: phoneNumber,
-      },
-      payerMessage: payerMessage || "Payment Request",
-      payeeNote: payeeNote || "MTN Payment",
-    };
+    const reference = generateReference();
 
-    await axios.post(
-      `${MTN_BASE_URL}/collection/v1_0/requesttopay`,
-      payload,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "X-Reference-Id": referenceId,
-          "X-Target-Environment": MTN_ENVIRONMENT,
-          "Ocp-Apim-Subscription-Key": MTN_SUBSCRIPTION_KEY,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    const payment = await Payment.create({
+    // CALL URUBUTO
+    const result = await initiatePayment({
+      amount: Number(price),
       phoneNumber,
-      amount,
-      currency,
-      referenceId,
-      externalId: payload.externalId,
-      payerMessage,
-      payeeNote,
+      customerName,
+      reference,
+    });
+
+    // ❌ STOP IF PAYMENT FAILED (DO NOT SAVE ANYTHING)
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Payment initiation failed",
+        error: result.error,
+      });
+    }
+
+    const urubutoData = result.data?.data;
+
+    // ✅ SAVE ONLY SUCCESSFUL INITIATION
+    const payment = await Payment.create({
+      reference,
+      customerName,
+      phoneNumber,
+      productName,
+      price,
+
+      paymentChannel: "MOMO",
       status: "PENDING",
+
+      urubutoReference:
+        urubutoData?.internal_transaction_ref_number || null,
+
+      rawResponse: result.data,
     });
 
     return res.status(201).json({
       success: true,
-      message: "Payment request sent successfully",
-      payment,
+      message: "Payment initiated successfully",
+      data: payment,
     });
+
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Server error",
+      error: error.message,
     });
   }
 };
 
-/**
- * CHECK PAYMENT STATUS
- */
-const checkPaymentStatus = async (req, res) => {
-  try {
-    const { referenceId } = req.params;
 
-    const token = await getAccessToken();
 
-    const response = await axios.get(
-      `${MTN_BASE_URL}/collection/v1_0/requesttopay/${referenceId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "X-Target-Environment": MTN_ENVIRONMENT,
-          "Ocp-Apim-Subscription-Key": MTN_SUBSCRIPTION_KEY,
-        },
-      }
-    );
-
-    await Payment.findOneAndUpdate(
-      { referenceId },
-      { status: response.data.status },
-      { new: true }
-    );
-
-    return res.status(200).json({
-      success: true,
-      status: response.data,
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
-/**
- * GET ALL PAYMENTS
- */
+// GET ALL PAYMENTS
 const getAllPayments = async (req, res) => {
   try {
-    const payments = await Payment.find().sort({ createdAt: -1 });
+    const payments = await Payment.find().sort({
+      createdAt: -1,
+    });
 
-    return res.status(200).json({
+    return res.json({
       success: true,
-      count: payments.length,
-      payments,
+      data: payments,
     });
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Failed to fetch payments",
+      error: error.message,
+    });
+  }
+};
+
+
+// GET SINGLE PAYMENT
+const getPayment = async (req, res) => {
+  try {
+    const payment = await Payment.findById(
+      req.params.id
+    );
+
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: "Payment not found",
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: payment,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching payment",
+      error: error.message,
+    });
+  }
+};
+
+
+// CHECK PAYMENT STATUS (SYNC WITH URUBUTO)
+const paymentStatus = async (req, res) => {
+  try {
+    const { reference } = req.params;
+
+    const payment = await Payment.findOne({
+      reference,
+    });
+
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: "Payment not found",
+      });
+    }
+
+    const result =
+      await checkPaymentStatus(reference);
+
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Failed to check status",
+        error: result.error,
+      });
+    }
+
+    const status =
+      result.data?.data?.transaction_status ||
+      "PENDING";
+
+    payment.status = status;
+    payment.rawResponse = result.data;
+
+    await payment.save();
+
+    return res.json({
+      success: true,
+      status,
+      data: payment,
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Status check failed",
+      error: error.message,
+    });
+  }
+};
+
+
+// DELETE PAYMENT
+const deletePayment = async (req, res) => {
+  try {
+    const payment = await Payment.findByIdAndDelete(
+      req.params.id
+    );
+
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: "Payment not found",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Payment deleted",
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Delete failed",
+      error: error.message,
     });
   }
 };
 
 module.exports = {
   createPayment,
-  checkPaymentStatus,
   getAllPayments,
+  getPayment,
+  paymentStatus,
+  deletePayment,
 };

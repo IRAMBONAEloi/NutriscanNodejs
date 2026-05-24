@@ -3,23 +3,26 @@ const router = express.Router();
 
 const {
   createPayment,
-  checkPaymentStatus,
   getAllPayments,
+  getPayment,
+  paymentStatus,
+  deletePayment,
 } = require("../controllers/paymentController");
 
-/**
- * CREATE PAYMENT
- */
-router.post("/request-payment", createPayment);
 
-/**
- * CHECK PAYMENT STATUS
- */
-router.get("/status/:referenceId", checkPaymentStatus);
+// CREATE PAYMENT
+router.post("/create", createPayment);
 
-/**
- * GET ALL PAYMENTS
- */
+// GET ALL PAYMENTS
 router.get("/all", getAllPayments);
+
+// GET SINGLE PAYMENT
+router.get("/single/:id", getPayment);
+
+// CHECK PAYMENT STATUS (BY REFERENCE)
+router.get("/status/:reference", paymentStatus);
+
+// DELETE PAYMENT
+router.delete("/delete/:id", deletePayment);
 
 module.exports = router;
