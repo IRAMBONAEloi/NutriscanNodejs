@@ -1,15 +1,78 @@
+
+
 const mongoose = require("mongoose");
+
+// SAFE UNIQUE TRANSACTION ID (VERY IMPORTANT FIX)
+const generateTransactionId = () => {
+  return Math.floor(
+    1000000000 + Math.random() * 9000000000
+  ).toString();
+};
 
 const paymentSchema = new mongoose.Schema(
   {
-    phoneNumber: { type: String, required: true },
-    amount: { type: Number, required: true },
-    currency: { type: String, default: "EUR" },
-    referenceId: { type: String, required: true, unique: true },
-    externalId: String,
-    status: { type: String, default: "PENDING" },
-    payerMessage: String,
-    payeeNote: String,
+    reference: {
+      type: String,
+      required: true,
+      unique: true,
+    },
+
+    // ✅ ORDER ID (SAFE UNIQUE STRING)
+    orderId: {
+      type: String,
+      unique: true,
+      sparse: true
+     
+    },
+
+    // ✅ TRANSACTION ID (SAFE RANDOM NUMBER STRING)
+    transactionId: {
+      type: String,
+      unique: true,
+      sparse: true,
+      default: generateTransactionId,
+    },
+
+    customerName: {
+      type: String,
+      required: true,
+    },
+
+    phoneNumber: {
+      type: String,
+      required: true,
+    },
+
+    productName: {
+      type: String,
+      required: true,
+    },
+
+    price: {
+      type: Number,
+      required: true,
+    },
+
+    paymentChannel: {
+      type: String,
+      default: "MOMO",
+    },
+
+    status: {
+      type: String,
+      enum: ["PENDING", "SUCCESS", "FAILED"],
+      default: "PENDING",
+    },
+
+    urubutoReference: {
+      type: String,
+      default: null,
+    },
+
+    rawResponse: {
+      type: Object,
+      default: {},
+    },
   },
   { timestamps: true }
 );
