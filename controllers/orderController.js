@@ -277,6 +277,526 @@
 
 
 
+// const Order = require("../models/Order");
+// const crypto = require("crypto");
+
+// /* =====================================================
+//    VALID STATUS FLOW
+// ===================================================== */
+
+// const VALID_STATUSES = [
+//   "preparing",
+//   "ready",
+//   "completed",
+// ];
+
+// const STATUS_FLOW = {
+//   preparing: ["ready"],
+//   ready: ["completed"],
+//   completed: [],
+// };
+
+// /* =====================================================
+//    CREATE ORDER
+// ===================================================== */
+
+// exports.createOrder = async (req, res) => {
+//   try {
+//     const data = req.body;
+
+//     /* ================= VALIDATION ================= */
+
+//     if (!data?.personDetails?.name) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Customer name is required",
+//       });
+//     }
+
+//     if (
+//       !Array.isArray(data.items) ||
+//       data.items.length === 0
+//     ) {
+//       return res.status(400).json({
+//         success: false,
+//         message:
+//           "Order must contain at least one item",
+//       });
+//     }
+
+//     /* ================= IDEMPOTENCY ================= */
+
+//     const requestId =
+//       data.requestId ||
+//       req.headers["x-request-id"] ||
+//       crypto.randomUUID();
+
+//     const existingOrder = await Order.findOne({
+//       requestId,
+//     });
+
+//     if (existingOrder) {
+//       return res.status(200).json({
+//         success: true,
+//         message: "Duplicate prevented",
+//         data: existingOrder,
+//       });
+//     }
+
+//     /* ================= SAFE DATE ================= */
+
+//     let estimatedPickupTime = null;
+
+//     const rawDate =
+//       data.bookingDetails?.estimatedPickupTime;
+
+//     if (rawDate) {
+//       const parsedDate = new Date(rawDate);
+
+//       if (isNaN(parsedDate.getTime())) {
+//         return res.status(400).json({
+//           success: false,
+//           message:
+//             "Invalid estimatedPickupTime format",
+//         });
+//       }
+
+//       estimatedPickupTime = parsedDate;
+//     }
+
+//     /* ================= ORDER ID ================= */
+
+//     const orderId = `ORD-${Date.now()}-${crypto.randomUUID()}`;
+
+//     /* ================= CREATE ORDER ================= */
+
+//     const order = await Order.create({
+//       orderId,
+//       requestId,
+
+//       personDetails: {
+//         name: data.personDetails.name,
+//         tableNumber:
+//           data.personDetails.tableNumber || "",
+//         orderType:
+//           data.personDetails.orderType ||
+//           "dine-in",
+//       },
+
+//       bookingDetails: {
+//         estimatedPickupTime,
+
+//         specialInstructions:
+//           data.bookingDetails
+//             ?.specialInstructions || "",
+
+//         currentStatus: "preparing",
+
+//         statusHistory: [
+//           {
+//             status: "preparing",
+//             note: "Order created",
+//             timestamp: new Date(),
+//           },
+//         ],
+//       },
+
+//       items: data.items.map((item) => ({
+//         id: item.id || crypto.randomUUID(),
+
+//         name: item.name,
+
+//         quantity: item.quantity || 1,
+
+//         originalPrice:
+//           item.originalPrice || 0,
+
+//         finalPrice: item.finalPrice || 0,
+
+//         preparationTime:
+//           item.preparationTime || 0,
+
+//         customizations:
+//           item.customizations || [],
+
+//         specialInstructions:
+//           item.specialInstructions || "",
+//       })),
+
+//       notes: data.notes || "",
+
+//       status: "preparing",
+//     });
+
+//     return res.status(201).json({
+//       success: true,
+//       message: "Order created successfully",
+//       data: order,
+//     });
+//   } catch (error) {
+//     console.error(
+//       "CREATE ORDER ERROR:",
+//       error
+//     );
+
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
+
+// /* =====================================================
+//    GET ALL ORDERS
+// ===================================================== */
+
+// exports.getAllOrders = async (req, res) => {
+//   try {
+//     const page =
+//       parseInt(req.query.page) || 1;
+
+//     const limit =
+//       parseInt(req.query.limit) || 20;
+
+//     const skip = (page - 1) * limit;
+
+//     const totalOrders =
+//       await Order.countDocuments();
+
+//     const orders = await Order.find()
+//       .sort({ createdAt: -1 })
+//       .skip(skip)
+//       .limit(limit);
+
+//     return res.status(200).json({
+//       success: true,
+//       page,
+//       totalPages: Math.ceil(
+//         totalOrders / limit
+//       ),
+//       totalOrders,
+//       count: orders.length,
+//       data: orders,
+//     });
+//   } catch (error) {
+//     console.error(
+//       "GET ALL ORDERS ERROR:",
+//       error
+//     );
+
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
+
+// /* =====================================================
+//    GET ORDER BY ID
+// ===================================================== */
+
+// exports.getOrderById = async (req, res) => {
+//   try {
+//     const { orderId } = req.params;
+
+//     const order = await Order.findOne({
+//       orderId,
+//     });
+
+//     if (!order) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Order not found",
+//       });
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       data: order,
+//     });
+//   } catch (error) {
+//     console.error(
+//       "GET ORDER ERROR:",
+//       error
+//     );
+
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
+
+// /* =====================================================
+//    EDIT ORDER
+// ===================================================== */
+
+// exports.editOrder = async (req, res) => {
+//   try {
+//     const { orderId } = req.params;
+
+//     const data = req.body;
+
+//     const order = await Order.findOne({
+//       orderId,
+//     });
+
+//     if (!order) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Order not found",
+//       });
+//     }
+
+//     /* ================= SAFE DATE ================= */
+
+//     let estimatedPickupTime =
+//       order.bookingDetails
+//         ?.estimatedPickupTime || null;
+
+//     const rawDate =
+//       data.bookingDetails?.estimatedPickupTime;
+
+//     if (rawDate) {
+//       const parsedDate = new Date(rawDate);
+
+//       if (isNaN(parsedDate.getTime())) {
+//         return res.status(400).json({
+//           success: false,
+//           message:
+//             "Invalid estimatedPickupTime format",
+//         });
+//       }
+
+//       estimatedPickupTime = parsedDate;
+//     }
+
+//     /* ================= PERSON DETAILS ================= */
+
+//     if (data.personDetails) {
+//       order.personDetails.name =
+//         data.personDetails.name ||
+//         order.personDetails.name;
+
+//       order.personDetails.tableNumber =
+//         data.personDetails.tableNumber ||
+//         order.personDetails.tableNumber;
+
+//       order.personDetails.orderType =
+//         data.personDetails.orderType ||
+//         order.personDetails.orderType;
+//     }
+
+//     /* ================= BOOKING DETAILS ================= */
+
+//     if (data.bookingDetails) {
+//       order.bookingDetails.estimatedPickupTime =
+//         estimatedPickupTime;
+
+//       order.bookingDetails.specialInstructions =
+//         data.bookingDetails
+//           .specialInstructions ||
+//         order.bookingDetails
+//           .specialInstructions;
+//     }
+
+//     /* ================= ITEMS ================= */
+
+//     if (
+//       Array.isArray(data.items) &&
+//       data.items.length > 0
+//     ) {
+//       order.items = data.items.map(
+//         (item) => ({
+//           id:
+//             item.id ||
+//             crypto.randomUUID(),
+
+//           name: item.name,
+
+//           quantity:
+//             item.quantity || 1,
+
+//           originalPrice:
+//             item.originalPrice || 0,
+
+//           finalPrice:
+//             item.finalPrice || 0,
+
+//           preparationTime:
+//             item.preparationTime || 0,
+
+//           customizations:
+//             item.customizations || [],
+
+//           specialInstructions:
+//             item.specialInstructions ||
+//             "",
+//         })
+//       );
+//     }
+
+//     /* ================= NOTES ================= */
+
+//     if (data.notes !== undefined) {
+//       order.notes = data.notes;
+//     }
+
+//     await order.save();
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Order updated successfully",
+//       data: order,
+//     });
+//   } catch (error) {
+//     console.error(
+//       "EDIT ORDER ERROR:",
+//       error
+//     );
+
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
+
+// /* =====================================================
+//    UPDATE ORDER STATUS
+// ===================================================== */
+
+// exports.updateOrderStatus = async (
+//   req,
+//   res
+// ) => {
+//   try {
+//     const { orderId } = req.params;
+
+//     const { status, note } = req.body;
+
+//     if (!status) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Status is required",
+//       });
+//     }
+
+//     if (
+//       !VALID_STATUSES.includes(status)
+//     ) {
+//       return res.status(400).json({
+//         success: false,
+//         message: `Invalid status. Allowed statuses: ${VALID_STATUSES.join(
+//           ", "
+//         )}`,
+//       });
+//     }
+
+//     const order = await Order.findOne({
+//       orderId,
+//     });
+
+//     if (!order) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Order not found",
+//       });
+//     }
+
+//     const currentStatus = order.status;
+
+//     const allowedTransitions =
+//       STATUS_FLOW[currentStatus] || [];
+
+//     if (
+//       !allowedTransitions.includes(status)
+//     ) {
+//       return res.status(400).json({
+//         success: false,
+//         message: `Cannot change status from ${currentStatus} to ${status}`,
+//       });
+//     }
+
+//     /* ================= UPDATE STATUS ================= */
+
+//     order.status = status;
+
+//     order.bookingDetails.currentStatus =
+//       status;
+
+//     order.bookingDetails.statusHistory.push(
+//       {
+//         status,
+//         note:
+//           note ||
+//           `Status changed to ${status}`,
+//         timestamp: new Date(),
+//       }
+//     );
+
+//     await order.save();
+
+//     return res.status(200).json({
+//       success: true,
+//       message:
+//         "Order status updated successfully",
+//       data: order,
+//     });
+//   } catch (error) {
+//     console.error(
+//       "UPDATE STATUS ERROR:",
+//       error
+//     );
+
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
+
+// /* =====================================================
+//    DELETE ORDER
+// ===================================================== */
+
+// exports.deleteOrder = async (req, res) => {
+//   try {
+//     const { orderId } = req.params;
+
+//     const order =
+//       await Order.findOneAndDelete({
+//         orderId,
+//       });
+
+//     if (!order) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Order not found",
+//       });
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       message:
+//         "Order deleted successfully",
+//     });
+//   } catch (error) {
+//     console.error(
+//       "DELETE ORDER ERROR:",
+//       error
+//     );
+
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
+
+
+
+
 const Order = require("../models/Order");
 const crypto = require("crypto");
 
@@ -294,6 +814,38 @@ const STATUS_FLOW = {
   preparing: ["ready"],
   ready: ["completed"],
   completed: [],
+};
+
+/* =====================================================
+   HELPER: EMIT SOCKET EVENT
+===================================================== */
+
+const emitOrderUpdate = (req, order, eventType = "order-updated") => {
+  try {
+    const io = req.app.get("io");
+    if (io) {
+      // Emit to the specific order room
+      io.to(order.orderId).emit(eventType, {
+        success: true,
+        event: eventType,
+        data: order,
+        timestamp: new Date().toISOString(),
+      });
+      
+      // Also emit to a global kitchen/orders room for dashboard updates
+      io.emit("kitchen-order-update", {
+        success: true,
+        event: eventType,
+        orderId: order.orderId,
+        status: order.status,
+        timestamp: new Date().toISOString(),
+      });
+      
+      console.log(`📡 Socket emitted ${eventType} for order: ${order.orderId}`);
+    }
+  } catch (error) {
+    console.error("Socket emit error:", error);
+  }
 };
 
 /* =====================================================
@@ -319,8 +871,7 @@ exports.createOrder = async (req, res) => {
     ) {
       return res.status(400).json({
         success: false,
-        message:
-          "Order must contain at least one item",
+        message: "Order must contain at least one item",
       });
     }
 
@@ -356,8 +907,7 @@ exports.createOrder = async (req, res) => {
       if (isNaN(parsedDate.getTime())) {
         return res.status(400).json({
           success: false,
-          message:
-            "Invalid estimatedPickupTime format",
+          message: "Invalid estimatedPickupTime format",
         });
       }
 
@@ -376,22 +926,14 @@ exports.createOrder = async (req, res) => {
 
       personDetails: {
         name: data.personDetails.name,
-        tableNumber:
-          data.personDetails.tableNumber || "",
-        orderType:
-          data.personDetails.orderType ||
-          "dine-in",
+        tableNumber: data.personDetails.tableNumber || "",
+        orderType: data.personDetails.orderType || "dine-in",
       },
 
       bookingDetails: {
         estimatedPickupTime,
-
-        specialInstructions:
-          data.bookingDetails
-            ?.specialInstructions || "",
-
+        specialInstructions: data.bookingDetails?.specialInstructions || "",
         currentStatus: "preparing",
-
         statusHistory: [
           {
             status: "preparing",
@@ -403,30 +945,21 @@ exports.createOrder = async (req, res) => {
 
       items: data.items.map((item) => ({
         id: item.id || crypto.randomUUID(),
-
         name: item.name,
-
         quantity: item.quantity || 1,
-
-        originalPrice:
-          item.originalPrice || 0,
-
+        originalPrice: item.originalPrice || 0,
         finalPrice: item.finalPrice || 0,
-
-        preparationTime:
-          item.preparationTime || 0,
-
-        customizations:
-          item.customizations || [],
-
-        specialInstructions:
-          item.specialInstructions || "",
+        preparationTime: item.preparationTime || 0,
+        customizations: item.customizations || [],
+        specialInstructions: item.specialInstructions || "",
       })),
 
       notes: data.notes || "",
-
       status: "preparing",
     });
+
+    /* ================= EMIT SOCKET EVENT ================= */
+    emitOrderUpdate(req, order, "order-created");
 
     return res.status(201).json({
       success: true,
@@ -434,10 +967,7 @@ exports.createOrder = async (req, res) => {
       data: order,
     });
   } catch (error) {
-    console.error(
-      "CREATE ORDER ERROR:",
-      error
-    );
+    console.error("CREATE ORDER ERROR:", error);
 
     return res.status(500).json({
       success: false,
@@ -452,18 +982,18 @@ exports.createOrder = async (req, res) => {
 
 exports.getAllOrders = async (req, res) => {
   try {
-    const page =
-      parseInt(req.query.page) || 1;
-
-    const limit =
-      parseInt(req.query.limit) || 20;
-
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
     const skip = (page - 1) * limit;
+    
+    // Filter by status if provided
+    const filter = {};
+    if (req.query.status && VALID_STATUSES.includes(req.query.status)) {
+      filter.status = req.query.status;
+    }
 
-    const totalOrders =
-      await Order.countDocuments();
-
-    const orders = await Order.find()
+    const totalOrders = await Order.countDocuments(filter);
+    const orders = await Order.find(filter)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
@@ -471,18 +1001,13 @@ exports.getAllOrders = async (req, res) => {
     return res.status(200).json({
       success: true,
       page,
-      totalPages: Math.ceil(
-        totalOrders / limit
-      ),
+      totalPages: Math.ceil(totalOrders / limit),
       totalOrders,
       count: orders.length,
       data: orders,
     });
   } catch (error) {
-    console.error(
-      "GET ALL ORDERS ERROR:",
-      error
-    );
+    console.error("GET ALL ORDERS ERROR:", error);
 
     return res.status(500).json({
       success: false,
@@ -499,9 +1024,7 @@ exports.getOrderById = async (req, res) => {
   try {
     const { orderId } = req.params;
 
-    const order = await Order.findOne({
-      orderId,
-    });
+    const order = await Order.findOne({ orderId });
 
     if (!order) {
       return res.status(404).json({
@@ -515,10 +1038,7 @@ exports.getOrderById = async (req, res) => {
       data: order,
     });
   } catch (error) {
-    console.error(
-      "GET ORDER ERROR:",
-      error
-    );
+    console.error("GET ORDER ERROR:", error);
 
     return res.status(500).json({
       success: false,
@@ -534,12 +1054,9 @@ exports.getOrderById = async (req, res) => {
 exports.editOrder = async (req, res) => {
   try {
     const { orderId } = req.params;
-
     const data = req.body;
 
-    const order = await Order.findOne({
-      orderId,
-    });
+    const order = await Order.findOne({ orderId });
 
     if (!order) {
       return res.status(404).json({
@@ -550,12 +1067,9 @@ exports.editOrder = async (req, res) => {
 
     /* ================= SAFE DATE ================= */
 
-    let estimatedPickupTime =
-      order.bookingDetails
-        ?.estimatedPickupTime || null;
+    let estimatedPickupTime = order.bookingDetails?.estimatedPickupTime || null;
 
-    const rawDate =
-      data.bookingDetails?.estimatedPickupTime;
+    const rawDate = data.bookingDetails?.estimatedPickupTime;
 
     if (rawDate) {
       const parsedDate = new Date(rawDate);
@@ -563,8 +1077,7 @@ exports.editOrder = async (req, res) => {
       if (isNaN(parsedDate.getTime())) {
         return res.status(400).json({
           success: false,
-          message:
-            "Invalid estimatedPickupTime format",
+          message: "Invalid estimatedPickupTime format",
         });
       }
 
@@ -574,66 +1087,31 @@ exports.editOrder = async (req, res) => {
     /* ================= PERSON DETAILS ================= */
 
     if (data.personDetails) {
-      order.personDetails.name =
-        data.personDetails.name ||
-        order.personDetails.name;
-
-      order.personDetails.tableNumber =
-        data.personDetails.tableNumber ||
-        order.personDetails.tableNumber;
-
-      order.personDetails.orderType =
-        data.personDetails.orderType ||
-        order.personDetails.orderType;
+      order.personDetails.name = data.personDetails.name || order.personDetails.name;
+      order.personDetails.tableNumber = data.personDetails.tableNumber || order.personDetails.tableNumber;
+      order.personDetails.orderType = data.personDetails.orderType || order.personDetails.orderType;
     }
 
     /* ================= BOOKING DETAILS ================= */
 
     if (data.bookingDetails) {
-      order.bookingDetails.estimatedPickupTime =
-        estimatedPickupTime;
-
-      order.bookingDetails.specialInstructions =
-        data.bookingDetails
-          .specialInstructions ||
-        order.bookingDetails
-          .specialInstructions;
+      order.bookingDetails.estimatedPickupTime = estimatedPickupTime;
+      order.bookingDetails.specialInstructions = data.bookingDetails.specialInstructions || order.bookingDetails.specialInstructions;
     }
 
     /* ================= ITEMS ================= */
 
-    if (
-      Array.isArray(data.items) &&
-      data.items.length > 0
-    ) {
-      order.items = data.items.map(
-        (item) => ({
-          id:
-            item.id ||
-            crypto.randomUUID(),
-
-          name: item.name,
-
-          quantity:
-            item.quantity || 1,
-
-          originalPrice:
-            item.originalPrice || 0,
-
-          finalPrice:
-            item.finalPrice || 0,
-
-          preparationTime:
-            item.preparationTime || 0,
-
-          customizations:
-            item.customizations || [],
-
-          specialInstructions:
-            item.specialInstructions ||
-            "",
-        })
-      );
+    if (Array.isArray(data.items) && data.items.length > 0) {
+      order.items = data.items.map((item) => ({
+        id: item.id || crypto.randomUUID(),
+        name: item.name,
+        quantity: item.quantity || 1,
+        originalPrice: item.originalPrice || 0,
+        finalPrice: item.finalPrice || 0,
+        preparationTime: item.preparationTime || 0,
+        customizations: item.customizations || [],
+        specialInstructions: item.specialInstructions || "",
+      }));
     }
 
     /* ================= NOTES ================= */
@@ -644,16 +1122,16 @@ exports.editOrder = async (req, res) => {
 
     await order.save();
 
+    /* ================= EMIT SOCKET EVENT ================= */
+    emitOrderUpdate(req, order, "order-edited");
+
     return res.status(200).json({
       success: true,
       message: "Order updated successfully",
       data: order,
     });
   } catch (error) {
-    console.error(
-      "EDIT ORDER ERROR:",
-      error
-    );
+    console.error("EDIT ORDER ERROR:", error);
 
     return res.status(500).json({
       success: false,
@@ -666,13 +1144,9 @@ exports.editOrder = async (req, res) => {
    UPDATE ORDER STATUS
 ===================================================== */
 
-exports.updateOrderStatus = async (
-  req,
-  res
-) => {
+exports.updateOrderStatus = async (req, res) => {
   try {
     const { orderId } = req.params;
-
     const { status, note } = req.body;
 
     if (!status) {
@@ -682,20 +1156,14 @@ exports.updateOrderStatus = async (
       });
     }
 
-    if (
-      !VALID_STATUSES.includes(status)
-    ) {
+    if (!VALID_STATUSES.includes(status)) {
       return res.status(400).json({
         success: false,
-        message: `Invalid status. Allowed statuses: ${VALID_STATUSES.join(
-          ", "
-        )}`,
+        message: `Invalid status. Allowed statuses: ${VALID_STATUSES.join(", ")}`,
       });
     }
 
-    const order = await Order.findOne({
-      orderId,
-    });
+    const order = await Order.findOne({ orderId });
 
     if (!order) {
       return res.status(404).json({
@@ -705,13 +1173,9 @@ exports.updateOrderStatus = async (
     }
 
     const currentStatus = order.status;
+    const allowedTransitions = STATUS_FLOW[currentStatus] || [];
 
-    const allowedTransitions =
-      STATUS_FLOW[currentStatus] || [];
-
-    if (
-      !allowedTransitions.includes(status)
-    ) {
+    if (!allowedTransitions.includes(status)) {
       return res.status(400).json({
         success: false,
         message: `Cannot change status from ${currentStatus} to ${status}`,
@@ -719,35 +1183,41 @@ exports.updateOrderStatus = async (
     }
 
     /* ================= UPDATE STATUS ================= */
-
+    const oldStatus = order.status;
     order.status = status;
-
-    order.bookingDetails.currentStatus =
-      status;
-
-    order.bookingDetails.statusHistory.push(
-      {
-        status,
-        note:
-          note ||
-          `Status changed to ${status}`,
-        timestamp: new Date(),
-      }
-    );
+    order.bookingDetails.currentStatus = status;
+    order.bookingDetails.statusHistory.push({
+      status,
+      note: note || `Status changed to ${status}`,
+      timestamp: new Date(),
+    });
 
     await order.save();
 
+    /* ================= EMIT SOCKET EVENT ================= */
+    emitOrderUpdate(req, order, "order-status-changed");
+    
+    // Also emit a specific status change event with more details
+    const io = req.app.get("io");
+    if (io) {
+      io.to(orderId).emit("order-status-update", {
+        success: true,
+        orderId: order.orderId,
+        oldStatus,
+        newStatus: status,
+        note: note || `Status changed to ${status}`,
+        timestamp: new Date().toISOString(),
+        order: order,
+      });
+    }
+
     return res.status(200).json({
       success: true,
-      message:
-        "Order status updated successfully",
+      message: "Order status updated successfully",
       data: order,
     });
   } catch (error) {
-    console.error(
-      "UPDATE STATUS ERROR:",
-      error
-    );
+    console.error("UPDATE STATUS ERROR:", error);
 
     return res.status(500).json({
       success: false,
@@ -764,10 +1234,7 @@ exports.deleteOrder = async (req, res) => {
   try {
     const { orderId } = req.params;
 
-    const order =
-      await Order.findOneAndDelete({
-        orderId,
-      });
+    const order = await Order.findOneAndDelete({ orderId });
 
     if (!order) {
       return res.status(404).json({
@@ -776,17 +1243,137 @@ exports.deleteOrder = async (req, res) => {
       });
     }
 
+    /* ================= EMIT SOCKET EVENT ================= */
+    const io = req.app.get("io");
+    if (io) {
+      io.to(orderId).emit("order-deleted", {
+        success: true,
+        orderId: order.orderId,
+        message: "Order has been deleted",
+        timestamp: new Date().toISOString(),
+      });
+      
+      io.emit("kitchen-order-update", {
+        success: true,
+        event: "order-deleted",
+        orderId: order.orderId,
+        timestamp: new Date().toISOString(),
+      });
+      
+      console.log(`📡 Socket emitted order-deleted for order: ${order.orderId}`);
+    }
+
     return res.status(200).json({
       success: true,
-      message:
-        "Order deleted successfully",
+      message: "Order deleted successfully",
     });
   } catch (error) {
-    console.error(
-      "DELETE ORDER ERROR:",
-      error
-    );
+    console.error("DELETE ORDER ERROR:", error);
 
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+/* =====================================================
+   BULK UPDATE STATUS (for kitchen management)
+===================================================== */
+
+exports.bulkUpdateStatus = async (req, res) => {
+  try {
+    const { orderIds, status, note } = req.body;
+
+    if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "orderIds array is required",
+      });
+    }
+
+    if (!status || !VALID_STATUSES.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Valid status is required. Allowed: ${VALID_STATUSES.join(", ")}`,
+      });
+    }
+
+    const updatedOrders = [];
+    const errors = [];
+
+    for (const orderId of orderIds) {
+      try {
+        const order = await Order.findOne({ orderId });
+        
+        if (!order) {
+          errors.push({ orderId, error: "Order not found" });
+          continue;
+        }
+
+        const allowedTransitions = STATUS_FLOW[order.status] || [];
+        
+        if (!allowedTransitions.includes(status)) {
+          errors.push({ orderId, error: `Cannot change from ${order.status} to ${status}` });
+          continue;
+        }
+
+        order.status = status;
+        order.bookingDetails.currentStatus = status;
+        order.bookingDetails.statusHistory.push({
+          status,
+          note: note || `Bulk status changed to ${status}`,
+          timestamp: new Date(),
+        });
+
+        await order.save();
+        updatedOrders.push(order);
+        
+        // Emit individual socket events
+        emitOrderUpdate(req, order, "order-status-changed");
+        
+      } catch (error) {
+        errors.push({ orderId, error: error.message });
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Updated ${updatedOrders.length} orders`,
+      updatedCount: updatedOrders.length,
+      errorCount: errors.length,
+      updatedOrders,
+      errors: errors.length > 0 ? errors : undefined,
+    });
+    
+  } catch (error) {
+    console.error("BULK UPDATE STATUS ERROR:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+/* =====================================================
+   GET ACTIVE ORDERS (for kitchen display)
+===================================================== */
+
+exports.getActiveOrders = async (req, res) => {
+  try {
+    const activeStatuses = ["preparing", "ready"];
+    
+    const orders = await Order.find({
+      status: { $in: activeStatuses }
+    }).sort({ createdAt: 1 }); // Oldest first for FIFO
+
+    return res.status(200).json({
+      success: true,
+      count: orders.length,
+      data: orders,
+    });
+  } catch (error) {
+    console.error("GET ACTIVE ORDERS ERROR:", error);
     return res.status(500).json({
       success: false,
       message: error.message,
