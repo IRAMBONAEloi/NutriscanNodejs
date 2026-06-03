@@ -286,6 +286,7 @@ const createPayment = async (req, res) => {
 
     // ❌ STOP IF PAYMENT FAILED (DO NOT SAVE ANYTHING)
     if (!result.success) {
+       console.error("❌ Urubuto rejected payment:", result.error);
       return res.status(400).json({
         success: false,
         message: "Payment initiation failed",
