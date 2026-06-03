@@ -45,7 +45,7 @@ const getChannel = (phone) => {
   if (/^07(2|8|9)/.test(p)) return "MOMO";
   if (/^07(3|4|5)/.test(p)) return "AIRTEL_MONEY";
 
-  return "MOMO";
+  return CHANNEL_NAME;
 };
 
 
@@ -73,6 +73,8 @@ const initiatePayment = async ({
       payer_email: process.env.PAYER_EMAIL || "",
     };
 
+     console.log("📤 Urubuto payload:", JSON.stringify(payload, null, 2));
+
     const response = await axios.post(
       `${BASE_URL}/v2/payment/initiate`,
       payload,
@@ -90,6 +92,7 @@ const initiatePayment = async ({
     };
 
   } catch (error) {
+    console.error("❌ Urubuto error:", JSON.stringify(error.response?.data || error.message, null, 2));
     return {
       success: false,
       error: error.response?.data || error.message,
